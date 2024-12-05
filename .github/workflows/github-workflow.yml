@@ -3,51 +3,53 @@ name: Azure Function App Deploy
 on:
   push:
     branches:
-      - main
+      - ${{ values.defaultBranch }}
   pull_request:
     branches:
-      - main
+      - ${{ values.defaultBranch }}
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_NAME: platformnexTestingApp
+  AZURE_FUNCTIONAPP_NAME: ${{ values.functionName }}
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
-  RESOURCE_GROUP: azure_function_testing_rrs
+  RESOURCE_GROUP: ${{ values.resourceGroup }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ values.environment }}
     
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup node Runtime
-        uses: actions/setup-node@v4
+      - name: Setup ${{ values.runtime }} Runtime
+        uses: actions/setup-${{ values.runtime }}@v4
         with:
-          node-version: 20
+          ${{ values.runtime }}-version: ${{ values.runtimeVersion }}
       
-      # Updated Azure login to use single JSON secret
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-          
       
       - name: Build Function App
         shell: bash
         run: |
-          if [ "node" = "node" ]; then
-            npm install
-            npm run build --if-present
-          elif [ "node" = "python" ]; then
+          if [ "${{ values.runtime }}" = "node" ]; then
+            if [ -f "package.json" ]; then
+              npm install
+              npm run build --if-present
+            fi
+          elif [ "${{ values.runtime }}" = "python" ]; then
             python -m pip install --upgrade pip
             pip install -r requirements.txt
-          elif [ "node" = "dotnet" ] || [ "node" = "dotnet-isolated" ]; then
+          elif [ "${{ values.runtime }}" = "dotnet" ] || [ "${{ values.runtime }}" = "dotnet-isolated" ]; then
             dotnet build --configuration Release
-          elif [ "node" = "java" ]; then
+          elif [ "${{ values.runtime }}" = "java" ]; then
             mvn clean package
+          elif [ "${{ values.runtime }}" = "powershell" ]; then
+            pwsh -Command "Install-Module -Name Az -Force"
           fi
       
       - name: Deploy to Azure Function App
@@ -55,7 +57,7 @@ jobs:
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }} 
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
           respect-funcignore: true
 
       - name: Configure App Settings
@@ -64,17 +66,17 @@ jobs:
           azcliversion: '2.50.0'
           inlineScript: |
             az functionapp config appsettings set \
-              --name  \
-              --resource-group  \
-              --settings '@'
+              --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --settings '@${{ values.appSettingsJson }}'
 
       - name: Enable Application Insights
-        if: false
+        if: ${{ values.enableMonitoring == 'true' }}
         uses: azure/CLI@v1
         with:
           azcliversion: '2.50.0'
           inlineScript: |
             az monitor app-insights component create \
-              --app  \
-              --location canadacentral \
-              --resource-group 
+              --app ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+              --location ${{ values.location }} \
+              --resource-group ${{ env.RESOURCE_GROUP }}
