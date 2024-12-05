@@ -40,6 +40,8 @@ jobs:
             if [ -f "package.json" ]; then
               npm install
               npm run build --if-present
+            else
+              echo "No package.json found. Skipping npm install."
             fi
           elif [ "${{ values.runtime }}" = "python" ]; then
             python -m pip install --upgrade pip
@@ -48,8 +50,6 @@ jobs:
             dotnet build --configuration Release
           elif [ "${{ values.runtime }}" = "java" ]; then
             mvn clean package
-          elif [ "${{ values.runtime }}" = "powershell" ]; then
-            pwsh -Command "Install-Module -Name Az -Force"
           fi
       
       - name: Deploy to Azure Function App
