@@ -1,0 +1,79 @@
+name: Azure Function App Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_NAME: platformnexTestingApp
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
+  RESOURCE_GROUP: azure_function_testing_rrs
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup node Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      # Updated Azure login to use single JSON secret
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: 
+      
+      - name: Build Function App
+        shell: bash
+        run: |
+          if [ "node" = "node" ]; then
+            npm install
+            npm run build --if-present
+          elif [ "node" = "python" ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          elif [ "node" = "dotnet" ] || [ "node" = "dotnet-isolated" ]; then
+            dotnet build --configuration Release
+          elif [ "node" = "java" ]; then
+            mvn clean package
+          fi
+      
+      - name: Deploy to Azure Function App
+        uses: Azure/functions-action@v1
+        with:
+          app-name: 
+          package: 
+          publish-profile: 
+          respect-funcignore: true
+
+      - name: Configure App Settings
+        uses: azure/CLI@v1
+        with:
+          azcliversion: '2.50.0'
+          inlineScript: |
+            az functionapp config appsettings set \
+              --name  \
+              --resource-group  \
+              --settings '@'
+
+      - name: Enable Application Insights
+        if: false
+        uses: azure/CLI@v1
+        with:
+          azcliversion: '2.50.0'
+          inlineScript: |
+            az monitor app-insights component create \
+              --app  \
+              --location canadacentral \
+              --resource-group 
